@@ -1,0 +1,23 @@
+{
+  "xgboost": {
+    "classifier__subsample": 0.8,
+    "classifier__reg_lambda": 0.5,
+    "classifier__reg_alpha": 1.0,
+    "classifier__n_estimators": 300,
+    "classifier__min_child_weight": 5,
+    "classifier__max_depth": 5,
+    "classifier__learning_rate": 0.03,
+    "classifier__gamma": 0.3,
+    "classifier__colsample_bytree": 1.0
+  },
+  "lightgbm": {
+    "classifier__subsample": 1.0,
+    "classifier__reg_lambda": 0.5,
+    "classifier__reg_alpha": 0.0,
+    "classifier__num_leaves": 15,
+    "classifier__n_estimators": 300,
+    "classifier__min_child_samples": 60,
+    "classifier__learning_rate": 0.03,
+    "classifier__colsample_bytree": 1.0
+  }
+}
