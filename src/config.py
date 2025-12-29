@@ -37,7 +37,7 @@ MODEL_NUMERIC_FEATURES: List[str] = [
     "pub_rec_bankruptcies",
     "tax_liens",
     "fico_average",
-    "last_fico_average",
+    # "last_fico_average",
     "credit_history_years",
     "installment_to_income_ratio",
     "mths_since_recent_inq",
@@ -47,8 +47,8 @@ MODEL_NUMERIC_FEATURES: List[str] = [
 ]
 
 MODEL_CATEGORICAL_FEATURES: List[str] = [
-    "grade",
-    "sub_grade",
+    # "grade",
+    # "sub_grade",
     "home_ownership",
     "verification_status",
     "purpose",

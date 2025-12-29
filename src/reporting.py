@@ -22,25 +22,53 @@ from sklearn.metrics import (
     confusion_matrix,
     f1_score,
     roc_auc_score,
+    precision_recall_curve,
+    fbeta_score,
 )
 
 from .config import ARTIFACT_DIR, CONFIG, MODEL_FEATURES
 
 
-def evaluate_split(pipeline, X, y, label: str) -> Tuple[Dict[str, float], np.ndarray, np.ndarray]:
-    """Compute metrics, predictions, and probabilities for a dataset split."""
+def evaluate_split(
+    pipeline,
+    X,
+    y,
+    label: str,
+    threshold: float | None = None,
+    fbeta_beta: float | None = None,
+) -> Tuple[Dict[str, float], np.ndarray, np.ndarray]:
+    """Compute metrics, predictions, and probabilities for a dataset split.
+
+    If `threshold` is provided, labels are derived from probabilities using that cutoff.
+    Otherwise the pipeline's own `predict` is used.
+    """
     proba = pipeline.predict_proba(X)[:, 1]
-    preds = pipeline.predict(X)
+    preds = (proba >= threshold).astype(int) if threshold is not None else pipeline.predict(X)
     metrics = {
         "roc_auc": roc_auc_score(y, proba) if len(np.unique(y)) > 1 else float("nan"),
         "average_precision": average_precision_score(y, proba),
         "accuracy": accuracy_score(y, preds),
         "f1": f1_score(y, preds),
     }
+    if fbeta_beta is not None:
+        metrics[f"f{fbeta_beta}"] = fbeta_score(y, preds, beta=fbeta_beta)
     print(f"\n=== {label.upper()} ===")
     print(json.dumps(metrics, indent=2))
     print(classification_report(y, preds, digits=4))
     return metrics, preds, proba
+
+
+def pick_threshold_by_fbeta(y_true, proba, beta: float = 2.0):
+    """Return the threshold that maximizes F-beta on a validation set."""
+    precision, recall, thresholds = precision_recall_curve(y_true, proba)
+    fbeta = (1 + beta**2) * precision * recall / (beta**2 * precision + recall + 1e-12)
+    best_idx = fbeta.argmax()
+    return float(thresholds[best_idx]), float(fbeta[best_idx]), float(precision[best_idx]), float(recall[best_idx])
+
+
+def apply_threshold(proba, threshold: float) -> np.ndarray:
+    """Convert probabilities into class labels using the provided threshold."""
+    return (np.asarray(proba) >= threshold).astype(int)
 
 
 def confusion_matrix_dataframe(y_true, y_pred) -> pd.DataFrame:

@@ -22,8 +22,6 @@ DEFAULT_BAD_STATUS_KEYWORDS = (
     "charged off",
     "default",
     "late (31-120 days)",
-    "late (16-30 days)",
-    "in grace period",
 )
 
 DEFAULT_GOOD_STATUS_KEYWORDS = ("fully paid",)
@@ -34,6 +32,8 @@ def label_loan_status(status: str) -> float:
     if not isinstance(status, str):
         return np.nan
     status_lower = status.strip().lower()
+    if "does not meet the credit policy" in status_lower:
+        return np.nan
     if any(keyword in status_lower for keyword in DEFAULT_BAD_STATUS_KEYWORDS):
         return 1.0
     if any(keyword in status_lower for keyword in DEFAULT_GOOD_STATUS_KEYWORDS):
@@ -79,11 +79,18 @@ def engineer_features(df: pd.DataFrame) -> pd.DataFrame:
     df["int_rate_decimal"] = clean_percentage(df["int_rate"])
     df["revol_util_decimal"] = clean_percentage(df["revol_util"])
     df["emp_length_years"] = df["emp_length"].apply(clean_emp_length)
-    df["issue_d"] = pd.to_datetime(df["issue_d"], format="%b-%Y", errors="coerce")
-    df["earliest_cr_line_dt"] = pd.to_datetime(df["earliest_cr_line"], format="%b-%Y", errors="coerce")
-    df["credit_history_years"] = (df["issue_d"] - df["earliest_cr_line_dt"]).dt.days / 365.25
+    df["issue_d"] = pd.to_datetime(df["issue_d"], format="%b-%Y", errors="coerce").dt.to_period("M")
+    df["earliest_cr_line_dt"] = pd.to_datetime(df["earliest_cr_line"], format="%b-%Y", errors="coerce").dt.to_period("M")
+    # df["credit_history_years"] = (df["issue_d"] - df["earliest_cr_line_dt"]).dt.days / 365.25
+
+    df["credit_history_years"] = (
+    (df["issue_d"].dt.to_timestamp(how="start") - df["earliest_cr_line_dt"].dt.to_timestamp(how="start"))
+    .dt.days / 365.25
+)
+
+
     df["fico_average"] = df.loc[:, ["fico_range_low", "fico_range_high"]].mean(axis=1)
-    df["last_fico_average"] = df.loc[:, ["last_fico_range_low", "last_fico_range_high"]].mean(axis=1)
+    # df["last_fico_average"] = df.loc[:, ["last_fico_range_low", "last_fico_range_high"]].mean(axis=1)
     df["installment_to_income_ratio"] = df["installment"] / (df["annual_inc"] / 12)
     df["installment_to_income_ratio"].replace([np.inf, -np.inf], np.nan, inplace=True)
     df.drop(columns=["earliest_cr_line_dt"], inplace=True)
@@ -145,17 +152,11 @@ def compute_scale_pos_weight(y: np.ndarray) -> float:
 
 
 def build_preprocessor() -> ColumnTransformer:
-    """Create preprocessing transformer for numeric and categorical features."""
-    numeric_transformer = Pipeline(
-        steps=[
-            ("imputer", SimpleImputer(strategy="median")),
-            ("scaler", StandardScaler()),
-        ]
-    )
+    """Create preprocessing transformer for numeric and categorical features without imputation."""
+    numeric_transformer = "passthrough" 
 
     categorical_transformer = Pipeline(
         steps=[
-            ("imputer", SimpleImputer(strategy="most_frequent")),
             ("encoder", OneHotEncoder(handle_unknown="ignore")),
         ]
     )
@@ -166,6 +167,27 @@ def build_preprocessor() -> ColumnTransformer:
             ("cat", categorical_transformer, MODEL_CATEGORICAL_FEATURES),
         ]
     )
+    # """Create preprocessing transformer for numeric and categorical features."""
+    # numeric_transformer = Pipeline(
+    #     steps=[
+    #         ("imputer", SimpleImputer(strategy="median")),
+    #         ("scaler", StandardScaler()),
+    #     ]
+    # )
+
+    # categorical_transformer = Pipeline(
+    #     steps=[
+    #         ("imputer", SimpleImputer(strategy="most_frequent")),
+    #         ("encoder", OneHotEncoder(handle_unknown="ignore")),
+    #     ]
+    # )
+
+    # return ColumnTransformer(
+    #     transformers=[
+    #         ("num", numeric_transformer, MODEL_NUMERIC_FEATURES),
+    #         ("cat", categorical_transformer, MODEL_CATEGORICAL_FEATURES),
+    #     ]
+    # )
 
 
 def build_xgb_classifier(scale_pos_weight: float | None = None) -> xgb.XGBClassifier:
